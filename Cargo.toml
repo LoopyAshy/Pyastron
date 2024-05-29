@@ -1,0 +1,11 @@
+[package]
+name = "pyastron"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3", "abi3-py37"] }
