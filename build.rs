@@ -10,6 +10,7 @@ macro_rules! astron_path {
 
 fn main() {
     //check_and_clone_astron();
+    println!("cargo:rustc-link-search=libs/");
 
 
     compile_dclass();
@@ -121,10 +122,22 @@ fn compile_astron() {
         .define("_CRT_SECURE_NO_WARNINGS", None);
 
     builder.compile("astrond");
+
+    println!("cargo:rustc-link-lib=dclass");
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("cargo:rustc-link-lib=static:+whole-archive=uv");
+        println!("cargo:rustc-link-lib=static:+whole-archive=yaml-cpp");
+        println!("cargo:rustc-link-lib=pthread");
+        println!("cargo:rustc-link-lib=rt");
+    }
 }
 
 fn compile_dclass() {
-    cc::Build::new()
+    let mut compiler = cc::Build::new();
+    
+    compiler
         .cpp(true)
         .std("c++14")
         .files(CppFilesFromPath::new(&astron_path!("src/dclass/dc")))
@@ -139,7 +152,12 @@ fn compile_dclass() {
         )))
         .include(astron_path!("src/dclass"))
         .opt_level(3)
-        .compile("dclass");
+        .emit_rerun_if_env_changed(true);
+
+    #[cfg(target_os = "linux")]
+    compiler.flag("-Wno-sign-compare").flag("-lfl");
+
+    compiler.compile("dclass");
 }
 
 struct CppFilesFromPath {
