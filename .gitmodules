@@ -1,0 +1,3 @@
+[submodule "libs/Astron"]
+	path = libs/Astron
+	url = https://github.com/LoopyAshy/Astron.git

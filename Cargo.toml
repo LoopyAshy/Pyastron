@@ -1,6 +1,6 @@
 [package]
 name = "pyastron"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 build = "build.rs"
 
@@ -8,7 +8,7 @@ build = "build.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.21.2", features = ["extension-module", "abi3", "abi3-py310"] }
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3", "abi3-py37"] }
 
 [build-dependencies]
 cc = { version = "1.0.98", features = ["parallel"] }

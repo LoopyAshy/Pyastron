@@ -1,0 +1,118 @@
+name: Build wheels
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VCPKGRS_TRIPLET: x64-windows-static-md
+  VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
+
+jobs:
+  build:
+    name: Build Windows x64 wheel
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) {
+            $vcpkgRoot = $env:VCPKG_ROOT
+          }
+          if (-not $vcpkgRoot) {
+            throw "The GitHub runner did not provide vcpkg."
+          }
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & "$vcpkgRoot\vcpkg.exe" install `
+            libuv:x64-windows-static-md `
+            yaml-cpp:x64-windows-static-md `
+            boost-icl:x64-windows-static-md
+
+      - name: Build stable-ABI wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          args: --release --locked --out dist
+
+      - name: Verify wheel compatibility tag
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem dist\*.whl
+          if ($wheel.Count -ne 1 -or $wheel.Name -notmatch '-cp37-abi3-win_amd64\.whl$') {
+            throw "Expected one cp37-abi3 Windows x64 wheel; found: $($wheel.Name)"
+          }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pyastron-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  smoke-test:
+    name: Import on Python ${{ matrix.python-version }}
+    needs: build
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7", "3.10"]
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: pyastron-wheel
+          path: dist
+
+      - name: Install and import wheel
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist\*.whl).FullName
+          python -m pip install --disable-pip-version-check $wheel
+          python -c "import pyastron; assert callable(pyastron.create); assert callable(pyastron.start_astron_direct)"
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
+          test "v${version}" = "${GITHUB_REF_NAME}"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: pyastron-wheel
+          path: dist
+
+      - name: Create release and upload wheel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.whl --verify-tag --generate-notes
