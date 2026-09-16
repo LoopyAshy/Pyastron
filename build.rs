@@ -150,7 +150,7 @@ fn configure_windows_dependencies(builder: &mut cc::Build) {
 
     builder.include(include_path);
     println!("cargo:rustc-link-search=native={}", library_path.display());
-    println!("cargo:rustc-link-lib=static=uv");
+    println!("cargo:rustc-link-lib=static=uv_a");
     println!("cargo:rustc-link-lib=static=yaml-cpp");
 
     // Transitive Windows libraries required by a static libuv build.
